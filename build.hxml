@@ -1,0 +1,11 @@
+# Build release
+# WinMT ; Windows 10 My Tools
+# ---------------------------
+
+-cmd Echo Building WinMT Release
+
+-lib djNode
+-cp src/
+-main Main
+-js bin/winmt.js
+-D terminal
