@@ -47,9 +47,11 @@ class Engine
 	// : Service data, These are filled on `services_init()`
 	// :
 	var SERV_DB:Array<Serv>;		// All the services that are read
+	
+	/// to be removed:
+	var SERV_USER:Array<Serv>;		// User Services - what was parsed from the system. enabled + disabled
 	var SERV_BLOCK:Array<Serv>;		// Services in the BlockList in the config.ini (only the valid ones)
 	var SERV_NULL:Array<String>;	// Service IDs from the BlockList that were not found in the system
-	var SERV_USER:Array<Serv>;		// User Services - what was parsed from the system. enabled + disabled
 	
 	// : Task Data. These are filled on `tasks_init()`
 	var TASKS_DB:Array<TaskD>;		// All system tasks
@@ -75,14 +77,69 @@ class Engine
 
 	}//---------------------------------------------------;
 	
-
+	
+	
+	/**
+	   Act on a group of services
+	   @param	grp all,user,grp:xxx
+	   @param	act enable/disable/info/save
+	   @param	extra 
+	**/
+	public function services_act_group(grp:String, act:String, ?extra:String)
+	{
+		trace('--> Services_act_group( $grp , $act) ');
+		
+		services_init();
+		var o = services_get_group(grp);
+		// :: Sort the services alphabetically
+		var sfn = (a:Serv, b:Serv) -> {
+			var aa = a.DISPLAY_NAME.charAt(0).toLowerCase();
+			var bb = b.DISPLAY_NAME.charAt(0).toLowerCase();
+			if (aa < bb) return -1; if(aa>bb) return 1; return 0;			
+		}
+		o.serv.sort(sfn);
+		
+		var ss = switch (grp){ 
+			case "all" : "Master Blocklist";
+			case "user" : "All user services";
+			default : "From custom group";
+		}
+		
+		P.p('- Service Group: <cyan>[$grp]<!> : $ss');
+		
+		if (act == "info")
+		{
+			P.H('Services Info  : ', 0);
+			services_info(o.serv);
+		}else if (act == "save")
+		{
+			P.H('Service Save to file :', 0);
+			services_save(o.serv, extra, grp);
+			o.bad = [];	// force no bad services print
+		}else
+		{	// It must be enable/disable
+			P.H(' Services $act: ', 0);
+			services_batch_toggle(o.serv, act == "disable");
+		}
+		
+		// -- Unavailable Service IDs
+		if (o.bad.length > 0)
+		{
+			P.ptem('<:yellow,black> WARNING: <!,yellow> ({1}) Services could not be identified : <!>', cast o.bad.length);
+			for (i in o.bad) P.p('\t- $i');
+			P.line(60);
+		}
+		
+		P.p("= DONE =");
+	}//---------------------------------------------------;
 	/**
 	  - Gets all System Services and initializes Arrays
 	  - You need to call this before service operations
+	  @throws
 	**/
-	public function services_init()
+	function services_init()
 	{
-		if (SERV_DB != null) return;
+		if (SERV_DB != null) return; // Already inited
 		
 		trace("--> Getting Service Data ");
 		
@@ -121,58 +178,26 @@ class Engine
 			
 			c += 5; // Go to the start of the next entry
 		}
+		// :: ^ parse end --------------- ::
 		
-		// :: Get User Services
-		
+		// :: Get User Services so they are ready
 		SERV_USER = [];
-		for (s in SERV_DB) {
-			if (s.TYPE == "USER_SHARE_PROCESS") {
-				SERV_USER.push(s);
-			}
-		}
-		
-		// :: Get Bad Services (those that don`t exist in system)
-		
-		SERV_BLOCK = [];
-		SERV_NULL = [];
-		var cserv = CONF.getTextArray('main', 'services');
-		for (sid in cserv) {
-			var serv = service_get_by_id(sid);
-			if (serv == null){
-				SERV_NULL.push(sid);
-				continue;
-			}
-			SERV_BLOCK.push(serv);
-		}
-		
-		// ::  Sort config and user services
-		
-		var sfn = (a:Serv, b:Serv) -> {
-			var aa = a.DISPLAY_NAME.charAt(0).toLowerCase();
-			var bb = b.DISPLAY_NAME.charAt(0).toLowerCase();
-			if (aa < bb) return -1; if(aa>bb) return 1; return 0;			
-		};
-		
-		SERV_BLOCK.sort(sfn);
-		SERV_USER.sort(sfn);
+		for (s in SERV_DB) if (s.TYPE == "USER_SHARE_PROCESS") SERV_USER.push(s);
 	}//---------------------------------------------------;
 	
 	
 	/**
-	 * Save all enabled services to a file
-	 * TODO: This function could be better. Print more info
+	 * Save a group of services to a file
+	 * I cannot PIPE with "node app info > file.txt" because I don't know cursor manipulation and colors jumble things up
 	 */
-	public function services_save(file:String)
+	function services_save(SS:Array<Serv>, file:String, groupName:String)
 	{
 		// Array with lines to print to the file
 		var D:Array<String> = [ 
 		'- WinMT , ' + Date.now().toString() , 
-		'- List of services (from the BlockList) that are enabled :', 
+		'- List of services (from $groupName) that are enabled :', 
 		'---------------', ''
 		];
-			
-		services_init();
-		var SS = SERV_BLOCK.concat(SERV_USER);
 		for (i in SS) {
 			if (i.isRunning()) {
 				D.push('Name: ' + i.DISPLAY_NAME);
@@ -181,10 +206,15 @@ class Engine
 			}
 		}
 		var fout = js.node.Path.normalize(file);
+		try{
 		Fs.writeFileSync(fout, D.join('\n'));
+		}catch (_) throw 'Cannot write to file ' + file;
+		P.p('Saved <$groupName> services to <cyan>"${fout}"<!>');
 		trace("-- Saved info to ", fout);
-		P.p('Saved enabled services to <cyan>"${fout}"<!>');
 	}//---------------------------------------------------;
+	
+
+	
 	
 	/**
 	 * Get and Print services Info
@@ -192,15 +222,10 @@ class Engine
 	 * - All USER services status
 	 * - All BLOCKLIST missing services
 	 */
-	public function services_info()
+	function services_info(SERV:Array<Serv>)
 	{
-		services_init();
 		var T_RUNNING = 0;
-		// Both those in config file + all user services
-		var SERV = SERV_BLOCK.concat(SERV_USER);
 		// --
-		P.H("Services Info  : ", 0);
-		P.p("These are the services that are defined in the <yellow>config.ini<!> file to be disabled");
 		P.table("L,50|L,10,1|L,12,1");
 		P.tline();
 		P.T.fg(magenta);
@@ -218,69 +243,74 @@ class Engine
 			P.T.fg(this_running?green:red);
 			P.tc(serv.STATE);
 			// --
-			if (serv.TYPE == "USER_SHARE_PROCESS")
-			{
+			if (serv.TYPE == "USER_SHARE_PROCESS") {
 				P.T.fg(cyan); P.tc("USER");
 			}else{
 				P.T.fg(magenta); P.tc(serv.TYPE);
 			}
-			
 			P.T.reset();
 			P.tr();
 		}
 		P.tline();
-		
 		// -- Table End
-		
 		// -- General Infos:
-		var TOTAL_VALID:Int = SERV_BLOCK.length;
-		P.ptem('Total <darkgray>(valid)<!> Services in BlockList: <yellow>{1}<!>', SERV_BLOCK.length);
-		P.ptem('Total User Services : <yellow>{1}<!>', SERV_USER.length);
+		P.ptem('Total <darkgray>(valid)<!> Services : <yellow>{1}<!>', SERV.length);
 		P.ptem('Running : <green>{1}<!> | Stopped : <red>{2}<!>', T_RUNNING, (SERV.length - T_RUNNING)); 
 		P.line(60);
-		
-		// -- Unavailable Service IDs
-		if (SERV_NULL.length > 0){
-			P.ptem('<:yellow,black> WARNING: <!,yellow> ({1}) Services could not be identified : <!>', cast SERV_NULL.length);
-			for (i in SERV_NULL) {
-				P.p('\t- $i');
-			}
-			P.line(60);
-		}		
-		
 		// Dev: Do I need to log, I mean it is right there on the screen.
-		
 	}//---------------------------------------------------;
 
-	/**
-	   Work on a group of services from the 'config.ini' file
-	   @param	grp Key name in the config file [serv] section
-	   @param	state true for disable, false to enable
-	**/
-	public function services_act_group(grp:String, disable:Bool = true)
-	{
-		trace('--> Services_Act_Group($grp,$disable)');
 	
-		// Get all services in this array
-		var SERV_GRP:Array<Serv> = [];
-		// Service IDs that were not found in system
-		var SERV_BAD:Array<String> = [];
+	/**
+	   - Returns unsorted, You need to sort later if you want
+	   @param	group Expecting user | all | grp:GROUPNAME
+	   @throws "param" means invalid parameter other throws are errors
+	**/
+	function services_get_group(group:String):{serv:Array<Serv>, bad:Array<String>}
+	{
+		if (group == null) throw "param";
 		
-		var servIDS = CONF.getTextArray('serv', grp);
-		if (servIDS == null) {
-			BaseApp.app.exitError('Key <yellow>"$grp"<!fg> does not exist in config.ini');
+		trace('--> Services_get_group ($group)');
+		
+		var S:Array<Serv> = [];
+		var SBAD:Array<String> = [];
+		var SIDS:Array<String>;
+		
+		if (group == "user")
+		{
+			for (s in SERV_DB) 
+				if (s.TYPE == "USER_SHARE_PROCESS") {
+					S.push(s);
+				}
+			return {
+				serv:S,
+				bad:SBAD		// There are never bad IDS when getting user services.
+			}
 		}
 		
-		services_init();
+		// DEV: ^ User services, was easy. Returns
 		
-		// - Translate user services to real service names:
-		// DEV: Scans servIDS for user service strings. 
-		//		Gets all system services that start with that userservice ID into userServ[]
-		// 		Removes original string from servIDS. so that servIDS can be processed normally without garbage
-		var userServ:Array<String> = [];
-		for (c in 0...servIDS.length) {
-			if (servIDS[c].substr(0, 2) == "u-") {
-				var sname = servIDS[c].substr(2);
+		if (group == "all")
+		{
+			SIDS = CONF.getTextArray('main', 'services');
+			if (SIDS == null) throw "Cannot find [main]:fservices in <config.ini>";
+		}else
+		{
+			// Check for groupname. Make sure it is corrent first, or throw
+			var s = group.split(':');
+			if (s.length == 1 || s[1].length == 0 || s[0] != "grp"){
+				throw "param";
+			}
+			SIDS = CONF.getTextArray('serv', s[1]);
+			if (SIDS == null) throw 'Cannot find [serv]:${s[1]} in <config.ini>';
+		}
+		
+		// :: Check for any user Services :::
+		var userServ:Array<String> = []; // All the actual service names for (u-) user services
+		for (c in 0...SIDS.length) 
+		{
+			if (SIDS[c].substr(0, 2) == "u-") {
+				var sname = SIDS[c].substr(2); // Real Service Name/ID
 				var found = false;
 				// DEV: I need to search all services for services starting with (n)
 				for (s in SERV_DB) {
@@ -289,71 +319,35 @@ class Engine
 						userServ.push(s.ID);
 					}
 				}
-				if (!found) SERV_BAD.push("USER:" + servIDS[c]);	// push the "u-servname" name
-				servIDS[c] = "";
+				if (!found) SBAD.push("USER:" + SIDS[c]);	// push the "u-servname" name
+				SIDS[c] = "";
 			}
 		}
-		
+		// :: --------------------------- ::
 		// Append the new generated names to the same array
 		// note: that old names are now "", so I need to check later
-		servIDS = servIDS.concat(userServ);
+		SIDS = SIDS.concat(userServ);
 		
 		// Now I need to convert the Array of Service ID
 		// to an array with real Service Objects in it
-		for (sid in servIDS) {
+		for (sid in SIDS) {
 			if (sid == "") continue;
 			var serv = service_get_by_id(sid);
 			if (serv == null) {
-				SERV_BAD.push(sid);
+				SBAD.push(sid);
 				trace('Warning, service ID "$sid" Does not exist');
-				continue;
+			}else{
+				S.push(serv);
 			}
-			SERV_GRP.push(serv);
-		}		
-		
-		// > Up to here
-		// SERV_BAD contains any service ID that was not found
-		// SERV_GRP are services ready to be processed
-		
-		// -> Actually disable/enable services now
-		
-		P.H(disable?"Disabling":"Enabling" + ' Services: ', 0);
-		P.p('- Services in KEYNAME <cyan>[$grp]<!> defined in the <yellow>config.ini<!> file');
-		services_batch_op(SERV_GRP, disable);
-		services_print_null(SERV_BAD);
-		P.p(" - DONE - ");
-	}//---------------------------------------------------;
-	
-	/**
-	   Stop ALL services, BlockList + UserServices
-	**/
-	public function services_stop_all()
-	{
-		trace("--> Services_Stop_All()");
-		services_init();
-		var AR = SERV_BLOCK.concat(SERV_USER);
-		P.H("Disabling ALL Services: ", 0);
-		P.p('- Services in BLOCKLIST defined in <yellow>config.ini<!> file');
-		P.p('- Plus all the dynamic <yellow>User Services<!>');
-		// -
-		services_batch_op(AR, true);
-		services_print_null(SERV_NULL);	// DEV: SERV_NULL was filled in services_init();
-		// -
-		P.p(" - DONE - ");
-	}//---------------------------------------------------;
-
-	// - Prints null Service ID Warning
-	// - Only prints if array non empty
-	public function services_print_null(ar:Array<String>)
-	{
-		// -- Unavailable Service IDs
-		if (ar.length > 0){
-			P.ptem('<:yellow,black> WARNING: <!,yellow> ({1}) Services could not be identified : <!>', cast ar.length);
-			for (i in ar) P.p('\t- $i');
-			P.line(60);
 		}
+		
+		// : now S[] contains all real service objects
+		// :     SBAD[] contains service IDs that were declared but not found
+		return {
+			serv:S,
+			bad:SBAD
+		};
 	}//---------------------------------------------------;
-	
 	
 	/**
 	   - Processes an Array of Services
@@ -362,7 +356,7 @@ class Engine
 	   @param	AR Array of services
 	   @param	act enable,disable | will also automatically start,stop
 	**/
-	function services_batch_op(AR:Array<Serv>, _disable:Bool = true)
+	function services_batch_toggle(AR:Array<Serv>, _disable:Bool = true)
 	{
 		P.table("L,54|R,14,1");
 		P.tline();
@@ -422,13 +416,10 @@ class Engine
 			P.tr();
 			
 		} // -- end for --
-		
 		P.tline();
-		
 		P.p('Processed Total <yellow>(${AR.length})<!> services.');
 		P.p('Changed state to <yellow>(${COUNT0})<!> services.');
-		if(NEED_RESTART)
-			P.p('You need to <cyan>restart<!> the computer to apply the changes.');
+		if(NEED_RESTART) P.p('You need to <cyan>restart<!> the computer to apply the changes.');
 		P.line(50);
 	}//---------------------------------------------------;
 	
@@ -436,9 +427,7 @@ class Engine
 	// -- Helper, get the service object of an ID. Null if not found
 	function service_get_by_id(id:String):Serv
 	{
-		for (s in SERV_DB) {
-			if (s.ID == id) return s;
-		}
+		for (s in SERV_DB) if (s.ID == id) return s;
 		return null;
 	}//---------------------------------------------------;
 	
@@ -448,19 +437,19 @@ class Engine
 	//====================================================;
 	
 	// Get all System tasks, along with run status and store in global array
-	public function tasks_init()
+	// subfunction: Used only in tasks_apply_blocklist();
+	function tasks_init()
 	{
 		if (TASKS_DB != null) return;
 		TASKS_DB = [];
 		TASKS_BAD = [];
 		TASKS_CONF = [];
 		
+		// -- Get All System Tasks
 		// `schtasks /Query` to get all tasks infos
 		var out = CLIApp.quickExecS('schtasks /Query /FO LIST') + "";
 		var lines:Array<String> = out.split(Os.EOL);
-		
-		// Get All System Tasks
-		var c = 1; // 
+		var c = 1; 
 		while (c < lines.length) {
 			// FOLDER:
 			var line = lines[c++];
@@ -471,11 +460,15 @@ class Engine
 					T.PATH = t_name;
 					T.STATUS = status;
 					TASKS_DB.push(T);
-					
 				c += 3;
 			}
-		}
+		} // --
 		
+		function task_get(path:String):TaskD{
+			for (i in TASKS_DB) if (i.PATH == path) return i; return null;
+		}//---------------------------------------------------;	
+		
+		// - Get all TASKS TO BLOCK from config file
 		var conf = CONF.getTextArray('main', 'tasks');
 		for (tid in conf) {
 			var t = task_get(tid);
@@ -487,80 +480,23 @@ class Engine
 		}
 	}//---------------------------------------------------;
 	
-	
-	public function tasks_info()
-	{
-		tasks_init();
-		
-		// -- Print Info
-		P.H("Tasks Info  : ", 0);
-		P.p('These are the tasks that are defined in the <yellow>config.ini<!> file to be disabled');
-		P.table("L,70|L,10,1");
-		P.tline();
-		P.T.fg(magenta);
-		P.tr(['Task Name', 'Status']);
-		P.T.reset();
-		P.tline();
-		//--
-		var ACTIVE = 0;
-		for (T in TASKS_CONF)
-		{
-			P.tc(T.PATH);
-			if (T.STATUS == "Disabled"){
-				P.T.fg(red);
-			}else{
-				P.T.fg(yellow);
-				ACTIVE++;
-			}
-			P.tc(T.STATUS);
-			P.T.reset();
-			P.tr();
-		}
-		P.tline();
-
-		// -- General Infos
-		P.ptem('Total <darkgray>(valid)<!> Tasks in Config.ini : <yellow>{1}<!>', TASKS_CONF.length);
-		P.ptem('Active : <yellow>{1}<!> | Disabled : <red>{2}<!>', ACTIVE, (TASKS_CONF.length - TASKS_BAD.length - ACTIVE));
-		P.line(60);
-		
-		// -- Unavailable Task Paths
-		if (TASKS_BAD.length > 0){
-			P.ptem('<:yellow,black> WARNING: <!,yellow> ({1}) Tasks do not exist in Task Scheduler : <!>', cast TASKS_BAD.length);
-			for (i in TASKS_BAD) {
-				P.p('\t- $i');
-			}
-			P.line(60);
-		}
-	}//---------------------------------------------------;
-	
-	// From all tasks
-	function task_get(path:String):TaskD
-	{
-		for (i in TASKS_DB) {
-			if (i.PATH == path) return i;
-		}return null;
-	}//---------------------------------------------------;
-	
 	/**
 	   Disable all tasks from Config File
 	**/
-	public function tasks_disable_conf()
+	public function tasks_apply_blocklist()
 	{
 		tasks_init();
 		
 		P.H("Disabling ALL tasks: ", 0);
 		P.p('- Tasks defined in the <yellow>config.ini<!> file');
-		
-		P.table("L,60|R,18,1");
-		P.tline();
-		P.T.fg(magenta);
-		P.tr(['Task', 'Status']);
-		P.T.reset();
-		P.tline();
-		
+			P.table("L,60|R,18,1");
+			P.tline();
+			P.T.fg(magenta);
+			P.tr(['Task', 'Status']);
+			P.T.reset();
+			P.tline();
 		var COUNT = 0;
 		var CANNOT = 0;
-		
 		for (T in TASKS_CONF)
 		{
 			P.tc(T.PATH, 1);
@@ -571,7 +507,6 @@ class Engine
 				P.tr();
 				continue;
 			}
-			
 			P.tc("...", 2);
 			var res = CLIApp.quickExecS('schtasks /change /tn "${T.PATH}" /disable');
 			if (res == null){
@@ -588,26 +523,24 @@ class Engine
 		}// -- end for
 		
 		P.tline();
-		
 		P.p('Processed Total <yellow>(${TASKS_CONF.length})<!> Tasks.');
-		if(COUNT>0) P.p('Just disabled <yellow>(${COUNT})<!> Tasks.');
+		if (COUNT > 0) P.p('Just disabled <yellow>(${COUNT})<!> Tasks.');
 		if (CANNOT > 0) P.p('Could not disable <red>(${CANNOT})<!> Tasks.');
-		
 		P.line(50);
 		
 		// -- Unavailable Task Paths
-		if (TASKS_BAD.length > 0){
+		if (TASKS_BAD.length > 0)
+		{
 			P.ptem('<:yellow,black> WARNING: <!,yellow> ({1}) Tasks do not exist in Task Scheduler : <!>', cast TASKS_BAD.length);
-			for (i in TASKS_BAD) {
-				P.p('\t- $i');
-			}
+			for (i in TASKS_BAD) P.p('\t- $i');
 			P.line(60);
 		}
 		P.p(" - DONE - ");
 	}//---------------------------------------------------;	
 	
-	
+
 	// Try to make a task owned by current user
+	// (CURRENTLY NOT USED)
 	function task_fix_permissions(t:TaskD):Bool
 	{
 		var path = Path.join(js.Node.process.env['windir'], 'System32\\Tasks');
@@ -632,7 +565,7 @@ class Engine
 	}//---------------------------------------------------;
 	
 	
-	// --
+	/** Apply POLICY Tweaks */
 	public function policy_apply()
 	{
 		P.H("Applying Group Policy Tweaks: ", 0);
@@ -670,7 +603,7 @@ class Engine
 	}//---------------------------------------------------;
 	
 	
-	// Apply reg values from a key in config.ini
+	// Apply reg values from a key in config.ini in ([main] section)
 	function reg_batch(key:String, displayKeys:Bool = false)
 	{
 		P.p('- Applying All Reg keys from <cyan>[$key]<!> in config.ini ::');

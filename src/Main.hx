@@ -36,13 +36,11 @@ class Main extends BaseApp
 		//ARGS.requireAction = true;
 		ARGS.helpText = 'Tweaks of services/tasks/registry are stored in <yellow>"config.ini"<!>';
 		ARGS.Actions = [
-			['serv_g', '<groupName> <0:1>. Groupname as defined in config.ini\nEnable<cyan>(1)<!> Disable<cyan>(0)<!> a custom set of services.<!>'],
-			['serv_off', 'Disable all services.\nAs well as all the user services.'],
-			['serv_save', 'Save all enabled services to a text file. You must provide the file path'],
-			['task_off', 'Disable a custom set of tasks'],
+			['serv', '<all, user, grp:GROUPNAME> <enable, disable, info>. GroupName as defined in config.ini [serv] section\n<all> = the main Service blocklist, <user> are all windows 10 usermode services'],
+			['serv_save', '<all, user, grp:GROUPNAME> <filename. Save services info to a text file.'],
+			['task_off', 'Disable tasks defined in the blocklist'],
 			['policy', 'Apply a custom set of Group Policy values'],
-			['tweaks', 'Apply some general tweaks'],
-			['info', 'Show Information on: <cyan>[task, serv, all]<!>']
+			['tweaks', 'Apply some general tweaks']
 		];	
 		
 		ARGS.Options = [
@@ -72,33 +70,40 @@ class Main extends BaseApp
 		
 		switch (argsAction)
 		{
+			// One time tweaks ::
+			
 			case 'tweaks' : 
 				E.tweaks_apply();
 				
 			case 'policy' : 
 				E.policy_apply();
-			
-			case 'serv_off' : 
-				E.services_stop_all();
-			
-			case 'serv_g' : 
-				if (argsInput[0] == null) exitError('Need to set the <cyan>KEYNAME<!> found in config.ini [serv] section');
-				if (argsInput[1] == null) exitError('Need to set <cyan>1<!> to enable <cyan>0<!> to disable the set services');
-				E.services_act_group(argsInput[0], argsInput[1] == "0");
-			
-			case 'serv_save' : 
-				if (argsInput[0] == null) exitError('Need to define a file');
-				E.services_save(argsInput[0]);
 				
 			case 'task_off' : 
-				E.tasks_disable_conf();
+				E.tasks_apply_blocklist();
 			
-			case 'info' : 
-				switch (argsInput[0]) {
-					case "task":	E.tasks_info();
-					case "serv": 	E.services_info();
-					default:		E.services_info(); E.tasks_info();
+			case 'serv':
+				var helpText = 'Correct format : <yellow>serv<!> <cyan>< all, user, grp:GROUPNAME ><!> <magenta>< enable, disable, info ><!>';
+				if (argsInput[0] == null || argsInput[1] == null) exitError(helpText);
+				if (['enable', 'disable', 'info'].indexOf(argsInput[1]) < 0) {
+					exitError(helpText);
 				}
+				try{
+					E.services_act_group(argsInput[0], argsInput[1]);
+				}catch (e:String){
+					if (e == "param") exitError(helpText);
+					exitError(e);
+				}
+				
+			case 'serv_save' : 
+				var helpText = 'Correct format : <yellow>serv_save<!> <cyan>< all, user, grp:GROUPNAME ><!> <magenta>FILENAME<!>';
+				if (argsInput[0] == null || argsInput[1] == null) exitError(helpText);
+				try{
+					E.services_act_group(argsInput[0], 'save', argsInput[1]);
+				}catch (e:String){
+					if (e == "param") exitError(helpText);
+					exitError(e);
+				}
+				
 			default:
 		}
 	}//---------------------------------------------------;
