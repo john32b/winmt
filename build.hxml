@@ -8,4 +8,3 @@
 -cp src/
 -main Main
 -js bin/winmt.js
--D terminal

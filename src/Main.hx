@@ -7,43 +7,39 @@ import js.html.AbortController;
 import djNode.BaseApp;
 import djNode.tools.LOG;
 
-
 class Main extends BaseApp
 {
-	
-	//var P:Print2;
 	var E:Engine;
 	
 	override function init():Void 
 	{	
-		// All traces will redirect to LOG object
 		#if debug
-		LOG.pipeTrace();
-		LOG.setLogFile("a:\\wintweak_log.txt");
-		LOG.FLAG_SHOW_POS = false;
-		CLIApp.FLAG_LOG_QUIET = false;
+			LOG.pipeTrace(); // All trace() calls will redirect to LOG object
+			LOG.setLogFile("a:\\winmt_log.txt");
+			LOG.FLAG_SHOW_POS = false;
+			CLIApp.FLAG_LOG_QUIET = false;
 		#end
 		
-		//FLAG_USE_SLASH_FOR_OPTION = true;
-		
-		// Initialize Program Information here.
 		PROGRAM_INFO = {
-			name:"Win10 - My Tools",	// winmt
+			name:"Win10 - My Tools (winmt)",
 			version:"0.2",
-			desc:"Tweaks services/tasks/group policy. Also applies some custom tweaks."
+			desc:"Manages services/tasks/group policy. Also applies some custom tweaks. <bold,black,:cyan>-- Use at your own risk! --<!>"
 			
 		};
-		//ARGS.requireAction = true;
+		
 		ARGS.helpText = 'Tweaks of services/tasks/registry are stored in <yellow>"config.ini"<!>';
 		ARGS.Actions = [
-			['serv', '<all, user, grp:GROUPNAME> <enable, disable, info>. GroupName as defined in config.ini [serv] section\n<all> = the main Service blocklist, <user> are all windows 10 usermode services'],
-			['serv_save', '<all, user, grp:GROUPNAME> <filename. Save services info to a text file.'],
+			['serv', '<all, main, user, grp:GROUPNAME> <enable, disable, info>. GroupName as defined in config.ini [serv] section\n<main> = the main Service blocklist, <user> are all windows 10 usermode services'],
 			['task_off', 'Disable tasks defined in the blocklist'],
 			['policy', 'Apply a custom set of Group Policy values'],
-			['tweaks', 'Apply some general tweaks']
+			['tweaks', 'Apply some general tweaks'],
+			#if debug
+			['test', 'Tests and debug']
+			#end
 		];	
 		
 		ARGS.Options = [
+			['sort', '{type,state}. Sort by TYPE or STATE. More useful when displaying infos.','yes']
 		];
 		
 		super.init();
@@ -67,10 +63,11 @@ class Main extends BaseApp
 		Print2.H_STYLES[0].line = null;
 		
 		E = new Engine();
+		E.SERVICE_SORTING = argsOptions.sort;
 		
 		switch (argsAction)
 		{
-			// One time tweaks ::
+			case 'test':
 			
 			case 'tweaks' : 
 				E.tweaks_apply();
@@ -82,7 +79,7 @@ class Main extends BaseApp
 				E.tasks_apply_blocklist();
 			
 			case 'serv':
-				var helpText = 'Correct format : <yellow>serv<!> <cyan>< all, user, grp:GROUPNAME ><!> <magenta>< enable, disable, info ><!>';
+				var helpText = 'Correct format : <yellow>serv<!> <cyan>< all, main, user, grp:GROUPNAME ><!> <magenta>< enable, disable, info ><!>';
 				if (argsInput[0] == null || argsInput[1] == null) exitError(helpText);
 				if (['enable', 'disable', 'info'].indexOf(argsInput[1]) < 0) {
 					exitError(helpText);
@@ -94,23 +91,11 @@ class Main extends BaseApp
 					exitError(e);
 				}
 				
-			case 'serv_save' : 
-				var helpText = 'Correct format : <yellow>serv_save<!> <cyan>< all, user, grp:GROUPNAME ><!> <magenta>FILENAME<!>';
-				if (argsInput[0] == null || argsInput[1] == null) exitError(helpText);
-				try{
-					E.services_act_group(argsInput[0], 'save', argsInput[1]);
-				}catch (e:String){
-					if (e == "param") exitError(helpText);
-					exitError(e);
-				}
-				
 			default:
 		}
 	}//---------------------------------------------------;
 	
 	// --
-	static function main()  {
-		new Main();
-	}//---------------------------------------------------;
+	static function main() new Main();
 	
-}// --
+}// -- 

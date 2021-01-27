@@ -6,16 +6,6 @@
 ░░████╔═████║░██║██║╚████║╚════╝██║╚██╔╝██║░░░██║░░░
 ░░╚██╔╝░╚██╔╝░██║██║░╚███║░░░░░░██║░╚═╝░██║░░░██║░░░
 ░░░╚═╝░░░╚═╝░░╚═╝╚═╝░░╚══╝░░░░░░╚═╝░░░░░╚═╝░░░╚═╝░░░
----------------------------------------------------------------------------------------------------------
-
-- Custom Tweak of a Windows 10 Installation (2019-LTSC)
-- Disable Services from a blocklist
-- Disable/Enable Service sets
-- Disable Tasks
-- Edit Group Policy
-- Some Tweaks to Registry
-
-- by ~JohnDimi~
 
 ********************************************************************************************************/
 
@@ -27,7 +17,6 @@ import djNode.Terminal;
 import djNode.utils.CLIApp;
 import djNode.utils.Print2;
 import djNode.utils.Registry;
-import haxe.display.Protocol.InitializeParams;
 import js.node.Fs;
 import js.node.Os;
 import js.node.Path;
@@ -47,16 +36,14 @@ class Engine
 	// : Service data, These are filled on `services_init()`
 	// :
 	var SERV_DB:Array<Serv>;		// All the services that are read
-	
-	/// to be removed:
-	var SERV_USER:Array<Serv>;		// User Services - what was parsed from the system. enabled + disabled
-	var SERV_BLOCK:Array<Serv>;		// Services in the BlockList in the config.ini (only the valid ones)
-	var SERV_NULL:Array<String>;	// Service IDs from the BlockList that were not found in the system
+	var SERV_USER:Array<Serv>;		// User Services, constructed from `SERV_DB`
 	
 	// : Task Data. These are filled on `tasks_init()`
 	var TASKS_DB:Array<TaskD>;		// All system tasks
 	var TASKS_CONF:Array<TaskD>;	// The tasks defined in config file (valid ones that exist)
 	var TASKS_BAD:Array<String>;	// Config file tasks not found in system
+	
+	public var SERVICE_SORTING:String = null;
 	
 	// --
 	public function new() 
@@ -80,59 +67,6 @@ class Engine
 	
 	
 	/**
-	   Act on a group of services
-	   @param	grp all,user,grp:xxx
-	   @param	act enable/disable/info/save
-	   @param	extra 
-	**/
-	public function services_act_group(grp:String, act:String, ?extra:String)
-	{
-		trace('--> Services_act_group( $grp , $act) ');
-		
-		services_init();
-		var o = services_get_group(grp);
-		// :: Sort the services alphabetically
-		var sfn = (a:Serv, b:Serv) -> {
-			var aa = a.DISPLAY_NAME.charAt(0).toLowerCase();
-			var bb = b.DISPLAY_NAME.charAt(0).toLowerCase();
-			if (aa < bb) return -1; if(aa>bb) return 1; return 0;			
-		}
-		o.serv.sort(sfn);
-		
-		var ss = switch (grp){ 
-			case "all" : "Master Blocklist";
-			case "user" : "All user services";
-			default : "From custom group";
-		}
-		
-		P.p('- Service Group: <cyan>[$grp]<!> : $ss');
-		
-		if (act == "info")
-		{
-			P.H('Services Info  : ', 0);
-			services_info(o.serv);
-		}else if (act == "save")
-		{
-			P.H('Service Save to file :', 0);
-			services_save(o.serv, extra, grp);
-			o.bad = [];	// force no bad services print
-		}else
-		{	// It must be enable/disable
-			P.H(' Services $act: ', 0);
-			services_batch_toggle(o.serv, act == "disable");
-		}
-		
-		// -- Unavailable Service IDs
-		if (o.bad.length > 0)
-		{
-			P.ptem('<:yellow,black> WARNING: <!,yellow> ({1}) Services could not be identified : <!>', cast o.bad.length);
-			for (i in o.bad) P.p('\t- $i');
-			P.line(60);
-		}
-		
-		P.p("= DONE =");
-	}//---------------------------------------------------;
-	/**
 	  - Gets all System Services and initializes Arrays
 	  - You need to call this before service operations
 	  @throws
@@ -153,6 +87,14 @@ class Engine
 			s.ID = StringTools.trim(lines[c++].split(':')[1]);
 			s.DISPLAY_NAME = StringTools.trim(lines[c++].split(':')[1]);
 			
+			/** HELP:
+			    Source String:
+					TYPE   : 60  USER_SHARE_PROCESS TEMPLATE  
+					TYPE   : 2  FILE_SYSTEM_DRIVER  
+				Capture:
+					(USER_SHARE_PROCESS)
+					(FILE_SYSTEM_DRIVER)
+			**/
 			var reg01:EReg = ~/.*:\W(.*?)\W+(.*?)\W+/;
 			if (reg01.match(lines[c++])){
 				s.TYPE = reg01.matched(2);
@@ -187,33 +129,95 @@ class Engine
 	
 	
 	/**
-	 * Save a group of services to a file
-	 * I cannot PIPE with "node app info > file.txt" because I don't know cursor manipulation and colors jumble things up
-	 */
-	function services_save(SS:Array<Serv>, file:String, groupName:String)
+	   Sort an array of service objects
+	   @param	serv
+	   @param	type : ab | state | type
+	   @return
+	**/
+	public function services_sort(serv:Array<Serv>, type:String):Array<Serv>
 	{
-		// Array with lines to print to the file
-		var D:Array<String> = [ 
-		'- WinMT , ' + Date.now().toString() , 
-		'- List of services (from $groupName) that are enabled :', 
-		'---------------', ''
-		];
-		for (i in SS) {
-			if (i.isRunning()) {
-				D.push('Name: ' + i.DISPLAY_NAME);
-				D.push('ID : ' + i.ID);
-				D.push('----------');
-			}
+		var sfn:Serv->Serv->Int;
+		switch (type)
+		{
+			case "type":
+				var ar = ['WIN32_SHARE_PROCESS', 'WIN32_OWN_PROCESS', 'USER_SHARE_PROCESS'];
+				sfn = (a:Serv, b:Serv) -> {
+					return (ar.indexOf(a.TYPE) - ar.indexOf(b.TYPE));
+				}
+			case "state":
+				sfn = (a:Serv, b:Serv) -> {
+					var aa = a.STATE.charAt(0).toLowerCase();
+					var bb = b.STATE.charAt(0).toLowerCase();
+					if (aa < bb) return -1; if(aa>bb) return 1; return 0;			
+				}	
+			default: // alphabetical
+				sfn = (a:Serv, b:Serv) -> {
+					var aa = a.DISPLAY_NAME.charAt(0).toLowerCase();
+					var bb = b.DISPLAY_NAME.charAt(0).toLowerCase();
+					if (aa < bb) return -1; if(aa>bb) return 1; return 0;			
+				}
 		}
-		var fout = js.node.Path.normalize(file);
-		try{
-		Fs.writeFileSync(fout, D.join('\n'));
-		}catch (_) throw 'Cannot write to file ' + file;
-		P.p('Saved <$groupName> services to <cyan>"${fout}"<!>');
-		trace("-- Saved info to ", fout);
+		serv.sort(sfn);
+		return serv;
 	}//---------------------------------------------------;
 	
-
+	
+	/**
+	   Act on a group of services. Basically 
+	   @param	grp | all,main,user,grp:xxx
+	   @param	act | enable/disable/info/save
+	**/
+	public function services_act_group(grp:String, act:String )
+	{
+		trace('--> Services_act_group( $grp , $act) ');
+		
+		services_init();
+		var o = services_get_group(grp);
+		services_sort(o.serv, 'ab');
+		if (SERVICE_SORTING != null) {
+			services_sort(o.serv, SERVICE_SORTING);
+		}
+		
+		// -- Help Text
+		var ss = switch (grp){ 
+			case "all" : "All Services";
+			case "main" : "Main Blocklist";
+			case "user" : "User services";
+			default : "Custom group " + grp;
+		}
+		
+		P.p('- Service Group: <cyan>[$grp]<!> : $ss');
+		
+		switch (act)
+		{
+			case "info":
+					P.H('Services Info  : ', 0);
+					services_info(o.serv);
+					
+			case "enable":
+					P.H(' Services Enable: ', 0);
+					services_batch_toggle(o.serv, false);
+					
+			case "disable":
+					if (grp == "all") throw "For safety reasons. You cannot disable ALL services";
+					P.H(' Services Enable: ', 0);
+					services_batch_toggle(o.serv, true);
+					
+			default: 
+					throw "param"; // General Parameter Error
+		}
+		
+		// -- Unavailable Service IDs
+		if (o.bad.length > 0)
+		{
+			P.ptem('<:yellow,black> WARNING: <!,yellow> ({1}) Services could not be identified : <!>', cast o.bad.length);
+			for (i in o.bad) P.p('\t- $i');
+			P.line(60);
+		}
+		
+		P.p("= DONE =");
+	}//---------------------------------------------------;
+	
 	
 	
 	/**
@@ -232,6 +236,7 @@ class Engine
 		P.tr(['Service', 'Status', 'Type']);
 		P.T.reset();
 		P.tline();
+		
 		for (serv in SERV) {
 			var this_running = false;
 			if (serv.isRunning()){
@@ -263,7 +268,12 @@ class Engine
 	
 	/**
 	   - Returns unsorted, You need to sort later if you want
-	   @param	group Expecting user | all | grp:GROUPNAME
+	   Get a group of services from an ID
+	   main : The services as declared in `config.ini`
+	   all  : All system services (excluding DRIVERS)
+	   user : All user services
+	   grp:Name : Custom group of services as defined in `config.ini`
+	   @param	group : main | user | all | grp:GROUPNAME
 	   @throws "param" means invalid parameter other throws are errors
 	**/
 	function services_get_group(group:String):{serv:Array<Serv>, bad:Array<String>}
@@ -276,21 +286,35 @@ class Engine
 		var SBAD:Array<String> = [];
 		var SIDS:Array<String>;
 		
+		// -- Return just the USER services from the system
 		if (group == "user")
 		{
-			for (s in SERV_DB) 
-				if (s.TYPE == "USER_SHARE_PROCESS") {
-					S.push(s);
-				}
 			return {
-				serv:S,
-				bad:SBAD		// There are never bad IDS when getting user services.
+				serv:SERV_USER,	// Created earlier on `services_init()`
+				bad:SBAD		// Empty, There are never bad IDS when getting ready services
 			}
 		}
 		
-		// DEV: ^ User services, was easy. Returns
-		
+		// -- Return ALL services
 		if (group == "all")
+		{
+			for (s in SERV_DB) {
+				if (['KERNEL_DRIVER', 'FILE_SYSTEM_DRIVER'].indexOf(s.TYPE) ==-1) {
+					// Only add if service type is not one of the above ^
+					S.push(s);
+				}
+			}
+			return {
+				serv:S,	// ALL services, system + user
+				bad:SBAD
+			};
+		}
+
+		// -- Now. "main" and "group:custom" will read the Service ID and construct
+		//    an array with real service Objects, Also will create a BadServices list
+		//	  which is services that were not found on the system.
+		
+		if (group == "main")
 		{
 			SIDS = CONF.getTextArray('main', 'services');
 			if (SIDS == null) throw "Cannot find [main]:fservices in <config.ini>";
@@ -305,7 +329,7 @@ class Engine
 			if (SIDS == null) throw 'Cannot find [serv]:${s[1]} in <config.ini>';
 		}
 		
-		// :: Check for any user Services :::
+		// :: Check for any user Services in those lists, so I can translate them.
 		var userServ:Array<String> = []; // All the actual service names for (u-) user services
 		for (c in 0...SIDS.length) 
 		{
@@ -323,6 +347,7 @@ class Engine
 				SIDS[c] = "";
 			}
 		}
+		
 		// :: --------------------------- ::
 		// Append the new generated names to the same array
 		// note: that old names are now "", so I need to check later
@@ -341,27 +366,26 @@ class Engine
 			}
 		}
 		
-		// : now S[] contains all real service objects
-		// :     SBAD[] contains service IDs that were declared but not found
 		return {
-			serv:S,
-			bad:SBAD
+			serv:S,		//	contains all real service objects
+			bad:SBAD	//	contains service IDs that were declared but not found
 		};
 	}//---------------------------------------------------;
 	
 	/**
 	   - Processes an Array of Services
-	   - Prints on terminal
+	   - Prints to terminal
 	   - ! Does not print a header, print it yourself. It just prints a Table
+	   Enabled services will be set to "DEMAND" / manual start
 	   @param	AR Array of services
 	   @param	act enable,disable | will also automatically start,stop
 	**/
 	function services_batch_toggle(AR:Array<Serv>, _disable:Bool = true)
 	{
-		P.table("L,54|R,14,1");
+		P.table("L,54|R,14,1|R,12,2");
 		P.tline();
 		P.T.fg(magenta);
-		P.tr(['Service', 'Status']);
+		P.tr(['Service', 'Run', 'State']);
 		P.T.reset();
 		P.tline();
 		
@@ -373,43 +397,74 @@ class Engine
 			P.tc(serv.DISPLAY_NAME,1);
 			P.tc("...", 2);
 			
-			if (!_disable)
+			// ::  Enable/Disable a service regardless if it is running or not
+			
+			if (!_disable) 
 			{
-				if (!serv.isRunning()) {
+					// -- TO ENABLE -----------------------
+					
 					var r = serv.enable();
-					if (r != null && r == "reg") NEED_RESTART = true;
-					P.T.resetFg(); P.tc('...', 2);
-					if (serv.start()){
-						P.T.fg(green);
-						COUNT0++;
-						P.tc("Just Started", 2);
-					}else{
+					if (r == "error") 
+					{
 						P.T.fg(red);
-						P.tc("Can't Start", 2);
+						P.tc("Can't Enable", 3);
+					}else{
+						if (r == "reg") {
+							NEED_RESTART = true;
+							P.T.fg(yellow); P.tc("Enabled REG", 3);
+						}else{
+							P.T.fg(green); P.tc("Enabled", 3);
+						}
 					}
-				}else{ // Already running
-					P.T.fg(cyan);
-					P.tc('Started', 2);
-				}
-				
+					
+					if (serv.isRunning())					// No reason to try to run it again
+					{
+						P.T.fg(green);
+						P.tc("Was running", 2);
+					}else
+					{
+						P.T.resetFg(); P.tc('...', 2);		// Draw a `...` on the cell and wait for result
+						if (serv.start()) {
+							P.T.fg(green);
+							P.tc("Started", 2); COUNT0++;
+						}else{
+							P.T.fg(red);
+							P.tc("Can't Start", 2);
+						}
+						
+					}
+
 			}else{
+					// -- TO DISABLE -----------------------
 				
-				if (serv.isRunning()) {
 					var r = serv.disable();
-					if (r != null && r == "reg") NEED_RESTART = true;
-					P.T.resetFg(); P.tc('...', 2);
-					if (serv.stop()){
-						P.T.fg(green);
-						COUNT0++;
-						P.tc("Just Stopped", 2);
+					if (r == "error")  {
+						P.T.fg(red); P.tc("Can't Disable", 3);
 					}else{
-						P.T.fg(red);
-						P.tc("Can't Stop", 2);
+						if (r == "reg") {
+							NEED_RESTART = true;
+							P.T.fg(yellow); P.tc("Disabled REG", 3);
+						}else{
+							P.T.fg(green); P.tc("Disabled", 3);
+						}
 					}
-				}else{ // Already Stopped
-					P.T.fg(cyan);
-					P.tc('Stopped', 2);
-				}
+					
+					if (r == "reg") NEED_RESTART = true;
+					if (!serv.isRunning())
+					{
+						P.T.fg(green);
+						P.tc("Was stopped", 2);
+					}else
+					{
+						P.T.resetFg(); P.tc('...', 2);
+						if (serv.stop()) {
+							P.T.fg(green);
+							P.tc("Stopped", 2); COUNT0++;
+						}else{
+							P.T.fg(red);
+							P.tc("Can't Stop", 2);
+						}
+					}
 			}
 			
 			P.T.reset();
