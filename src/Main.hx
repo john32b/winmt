@@ -39,7 +39,9 @@ class Main extends BaseApp
 		];	
 		
 		ARGS.Options = [
-			['sort', '[type,state] Sort by TYPE or STATE. Applies in `serv` action, useful when displaying infos.','yes']
+		
+			['sort', 'When displaying service infos, sort by <blue>[state, type]<!>.', 'yes'],
+			['id', 'When displaying service infos, display the service ID as well']
 		];
 		
 		super.init();
@@ -63,7 +65,7 @@ class Main extends BaseApp
 		Print2.H_STYLES[0].line = null;
 		
 		E = new Engine();
-		E.SERVICE_SORTING = argsOptions.sort;
+		E.OPTIONS = argsOptions;
 		
 		switch (argsAction)
 		{

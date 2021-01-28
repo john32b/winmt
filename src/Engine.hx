@@ -43,8 +43,7 @@ class Engine
 	var TASKS_CONF:Array<TaskD>;	// The tasks defined in config file (valid ones that exist)
 	var TASKS_BAD:Array<String>;	// Config file tasks not found in system
 	
-	// When displaying/operating services. Sort the list by {type,state}
-	public var SERVICE_SORTING:String = null;
+	public var OPTIONS:Dynamic;
 	
 	// --
 	public function new() 
@@ -171,8 +170,8 @@ class Engine
 		services_init();
 		var o = services_get_group(grp);
 		services_sort(o.serv, 'ab');
-		if (SERVICE_SORTING != null) {
-			services_sort(o.serv, SERVICE_SORTING);
+		if (OPTIONS.sort != null) {
+			services_sort(o.serv, OPTIONS.sort);
 		}
 		
 		// -- Help Text
@@ -226,11 +225,19 @@ class Engine
 	function services_info(SERV:Array<Serv>)
 	{
 		var T_RUNNING = 0;
-		// --
-		P.table("L,50|L,10,1|L,12,1");
-		P.tline();
-		P.T.fg(magenta);
-		P.tr(['Service', 'Status', 'Type']);
+		if (OPTIONS.id)
+		{
+			P.table("L,48|L,30,1|L,10,1|L,12,1");
+			P.tline();
+			P.T.fg(magenta);
+			P.tr(['Service', 'ID', 'Status', 'Type']);
+		}else{
+			P.table("L,48|L,10,1|L,12,1");
+			P.tline();
+			P.T.fg(magenta);
+			P.tr(['Service', 'Status', 'Type']);
+		}
+		
 		P.T.reset();
 		P.tline();
 		
@@ -241,10 +248,11 @@ class Engine
 				this_running = true;
 			}
 			P.tc(serv.DISPLAY_NAME);
+			if (OPTIONS.id) P.tc(serv.ID);
 			// --
 			P.T.fg(this_running?green:red);
 			P.tc(serv.STATE);
-			// --
+			// -- Minor visual, to translate "USER_SHARE_PROCESS" > "USER" and make it green
 			if (serv.TYPE == "USER_SHARE_PROCESS") {
 				P.T.fg(cyan); P.tc("USER");
 			}else{
