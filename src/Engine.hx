@@ -36,13 +36,14 @@ class Engine
 	// : Service data, These are filled on `services_init()`
 	// :
 	var SERV_DB:Array<Serv>;		// All the services that are read
-	var SERV_USER:Array<Serv>;		// User Services, constructed from `SERV_DB`
 	
 	// : Task Data. These are filled on `tasks_init()`
+	// :
 	var TASKS_DB:Array<TaskD>;		// All system tasks
 	var TASKS_CONF:Array<TaskD>;	// The tasks defined in config file (valid ones that exist)
 	var TASKS_BAD:Array<String>;	// Config file tasks not found in system
 	
+	// When displaying/operating services. Sort the list by {type,state}
 	public var SERVICE_SORTING:String = null;
 	
 	// --
@@ -120,11 +121,7 @@ class Engine
 			
 			c += 5; // Go to the start of the next entry
 		}
-		// :: ^ parse end --------------- ::
 		
-		// :: Get User Services so they are ready
-		SERV_USER = [];
-		for (s in SERV_DB) if (s.TYPE == "USER_SHARE_PROCESS") SERV_USER.push(s);
 	}//---------------------------------------------------;
 	
 	
@@ -289,25 +286,16 @@ class Engine
 		// -- Return just the USER services from the system
 		if (group == "user")
 		{
-			return {
-				serv:SERV_USER,	// Created earlier on `services_init()`
-				bad:SBAD		// Empty, There are never bad IDS when getting ready services
-			}
+			S = SERV_DB.filter( (s)-> s.TYPE == "USER_SHARE_PROCESS" );
+			return { serv:S, bad:SBAD }; // Note, SBAD is [], I am not expecting bad service names at this point
 		}
 		
 		// -- Return ALL services
 		if (group == "all")
 		{
-			for (s in SERV_DB) {
-				if (['KERNEL_DRIVER', 'FILE_SYSTEM_DRIVER'].indexOf(s.TYPE) ==-1) {
-					// Only add if service type is not one of the above ^
-					S.push(s);
-				}
-			}
-			return {
-				serv:S,	// ALL services, system + user
-				bad:SBAD
-			};
+			S = SERV_DB.filter( (s) -> ['KERNEL_DRIVER', 'FILE_SYSTEM_DRIVER'].indexOf(s.TYPE) ==-1 );
+			// ^ Add the services of type not belonging to that array 
+			return { serv:S, bad:SBAD };
 		}
 
 		// -- Now. "main" and "group:custom" will read the Service ID and construct
@@ -334,11 +322,11 @@ class Engine
 		for (c in 0...SIDS.length) 
 		{
 			if (SIDS[c].substr(0, 2) == "u-") {
-				var sname = SIDS[c].substr(2); // Real Service Name/ID
+				var sname = SIDS[c].substr(2).toLowerCase(); // Real Service Name/ID
 				var found = false;
 				// DEV: I need to search all services for services starting with (n)
 				for (s in SERV_DB) {
-					if (s.ID.indexOf(sname) == 0) {
+					if (s.ID.toLowerCase().indexOf(sname) == 0) {
 						found = true;
 						userServ.push(s.ID);
 					}
@@ -543,7 +531,7 @@ class Engine
 		tasks_init();
 		
 		P.H("Disabling ALL tasks: ", 0);
-		P.p('- Tasks defined in the <yellow>config.ini<!> file');
+		P.p('- Tasks defined in <yellow>config.ini<!>');
 			P.table("L,60|R,18,1");
 			P.tline();
 			P.T.fg(magenta);
@@ -620,7 +608,10 @@ class Engine
 	}//---------------------------------------------------;
 	
 	
-	/** Apply POLICY Tweaks */
+	/**
+	   Apply Group Policy Tweaks
+	   - As defined in `config.ini`
+	**/
 	public function policy_apply()
 	{
 		P.H("Applying Group Policy Tweaks: ", 0);
@@ -630,8 +621,10 @@ class Engine
 	
 	
 	/**
-	 * Apply REGISTRY Tweaks and COMMAND Tweaks from the config file
-	 */
+	   Apply REGISTRY Tweaks
+	   Apply Custom Commands
+	   - As defined in `config.ini`
+	**/
 	public function tweaks_apply()
 	{
 		P.H("Applying Registry Tweaks: ", 0);

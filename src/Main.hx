@@ -39,7 +39,7 @@ class Main extends BaseApp
 		];	
 		
 		ARGS.Options = [
-			['sort', '{type,state}. Sort by TYPE or STATE. More useful when displaying infos.','yes']
+			['sort', '[type,state] Sort by TYPE or STATE. Applies in `serv` action, useful when displaying infos.','yes']
 		];
 		
 		super.init();
