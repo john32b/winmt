@@ -26,6 +26,8 @@ import sys.io.File;
 class Engine
 {
 	static inline var CONF_FILE = "config.ini";
+	static inline var SECTION_SERVICES = 'services';
+	static inline var SECTION_TWEAKS = 'tweaks';
 	
 	var T:Terminal;
 	var P:Print2;
@@ -160,7 +162,7 @@ class Engine
 	
 	/**
 	   Act on a group of services. Basically 
-	   @param	grp | all,main,user,grp:xxx
+	   @param	grp | all,blocklist,user,group
 	   @param	act | enable/disable/info/save
 	**/
 	public function services_act_group(grp:String, act:String )
@@ -177,7 +179,7 @@ class Engine
 		// -- Help Text
 		var ss = switch (grp){ 
 			case "all" : "All Services";
-			case "main" : "Main Blocklist";
+			case "blocklist" : "Blocklist";
 			case "user" : "User services";
 			default : "Custom group " + grp;
 		}
@@ -211,7 +213,7 @@ class Engine
 			P.line(60);
 		}
 		
-		P.p("= DONE =");
+		P.p("- [OK] ");
 	}//---------------------------------------------------;
 	
 	
@@ -306,24 +308,12 @@ class Engine
 			return { serv:S, bad:SBAD };
 		}
 
-		// -- Now. "main" and "group:custom" will read the Service ID and construct
+		// -- This is a service group. read the Service IDs and construct
 		//    an array with real service Objects, Also will create a BadServices list
 		//	  which is services that were not found on the system.
 		
-		if (group == "main")
-		{
-			SIDS = CONF.getTextArray('main', 'services');
-			if (SIDS == null) throw "Cannot find [main]:fservices in <config.ini>";
-		}else
-		{
-			// Check for groupname. Make sure it is corrent first, or throw
-			var s = group.split(':');
-			if (s.length == 1 || s[1].length == 0 || s[0] != "grp"){
-				throw "param";
-			}
-			SIDS = CONF.getTextArray('serv', s[1]);
-			if (SIDS == null) throw 'Cannot find [serv]:${s[1]} in <config.ini>';
-		}
+		SIDS = CONF.getTextArray(SECTION_SERVICES, group);
+		if (SIDS == null) throw 'Cannot find [services]:$group in <config.ini>';
 		
 		// :: Check for any user Services in those lists, so I can translate them.
 		var userServ:Array<String> = []; // All the actual service names for (u-) user services
@@ -497,7 +487,6 @@ class Engine
 		TASKS_CONF = [];
 		
 		// -- Get All System Tasks
-		// `schtasks /Query` to get all tasks infos
 		var out = CLIApp.quickExecS('schtasks /Query /FO LIST') + "";
 		var lines:Array<String> = out.split(Os.EOL);
 		var c = 1; 
@@ -520,7 +509,7 @@ class Engine
 		}//---------------------------------------------------;	
 		
 		// - Get all TASKS TO BLOCK from config file
-		var conf = CONF.getTextArray('main', 'tasks');
+		var conf = CONF.getTextArray(SECTION_TWEAKS, 'tasks');
 		for (tid in conf) {
 			var t = task_get(tid);
 			if (t != null) {
@@ -532,7 +521,7 @@ class Engine
 	}//---------------------------------------------------;
 	
 	/**
-	   Disable all tasks from Config File
+	   Disable all tasks from [tweaks]:tasks 
 	**/
 	public function tasks_apply_blocklist()
 	{
@@ -586,7 +575,7 @@ class Engine
 			for (i in TASKS_BAD) P.p('\t- $i');
 			P.line(60);
 		}
-		P.p(" - DONE - ");
+		P.p("- [OK] ");
 	}//---------------------------------------------------;	
 	
 
@@ -617,8 +606,7 @@ class Engine
 	
 	
 	/**
-	   Apply Group Policy Tweaks
-	   - As defined in `config.ini`
+	   Apply Group Policy Tweaks from [tweaks]:gpolicy 
 	**/
 	public function policy_apply()
 	{
@@ -629,9 +617,8 @@ class Engine
 	
 	
 	/**
-	   Apply REGISTRY Tweaks
-	   Apply Custom Commands
-	   - As defined in `config.ini`
+	   Apply REGISTRY Tweaks [tweaks]:reg 
+	   Apply Custom Commands [tweaks]:commands 
 	**/
 	public function tweaks_apply()
 	{
@@ -643,7 +630,7 @@ class Engine
 		P.T.endl();
 		//
 		P.line(60);
-		var D = CONF.getTextArray('main', 'commands');
+		var D = CONF.getTextArray(SECTION_TWEAKS, 'commands');
 		for (l in D)
 		{
 			l = StringTools.trim(l);
@@ -655,16 +642,16 @@ class Engine
 			CLIApp.quickExecS(l);
 		}
 		P.line(60);
-		P.p("- DONE");
+		P.p("- [OK] ");
 	}//---------------------------------------------------;
 	
 	
 	// Apply reg values from a key in config.ini in ([main] section)
 	function reg_batch(key:String, displayKeys:Bool = false)
 	{
-		P.p('- Applying All Reg keys from <cyan>[$key]<!> in config.ini ::');
+		P.p('- Applying All Reg keys from <cyan>[$key]<!>:');
 		P.line(60);
-		var k = CONF.getTextArray('main', key);
+		var k = CONF.getTextArray(SECTION_TWEAKS, key);
 		var	c_key = "";
 		for (line in k)
 		{
@@ -688,7 +675,7 @@ class Engine
 			}
 		}
 		P.line(60);
-		P.p("- DONE");
+		P.p("- [OK] ");
 	}//---------------------------------------------------;
 	
 }//--)

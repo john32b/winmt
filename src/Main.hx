@@ -3,7 +3,6 @@ package;
 import djNode.utils.CLIApp;
 import djNode.utils.Print2;
 import js.Node;
-import js.html.AbortController;
 import djNode.BaseApp;
 import djNode.tools.LOG;
 
@@ -17,29 +16,26 @@ class Main extends BaseApp
 			LOG.pipeTrace(); // All trace() calls will redirect to LOG object
 			LOG.setLogFile("a:\\winmt_log.txt");
 			LOG.FLAG_SHOW_POS = false;
-			CLIApp.FLAG_LOG_QUIET = false;
+			CLIApp.FLAG_LOG_QUIET = false; // Trace the commands that CLIApp executes
 		#end
 		
 		PROGRAM_INFO = {
 			name:"Win10 - My Tools (winmt)",
 			version:"0.2",
-			desc:"Manages services/tasks/group policy. Also applies some custom tweaks. <bold,black,:cyan>-- Use at your own risk! --<!>"
+			desc:"Applies Tweaks, handles services. <bold,black,:cyan>-- Use at your own risk! --<!>"
 			
 		};
 		
-		ARGS.helpText = 'Tweaks of services/tasks/registry are stored in <yellow>"config.ini"<!>';
+		ARGS.helpText = 'Tweaks of services/tasks/registry are defined in <yellow>"config.ini"<!>';
 		ARGS.Actions = [
-			['serv', '<all, main, user, grp:GROUPNAME> <enable, disable, info>. GroupName as defined in config.ini [serv] section\n<main> = the main Service blocklist, <user> are all windows 10 usermode services'],
-			['task_off', 'Disable tasks defined in the blocklist'],
-			['policy', 'Apply a custom set of Group Policy values'],
-			['tweaks', 'Apply some general tweaks'],
-			#if debug
-			['test', 'Tests and debug']
-			#end
+			['serv', '(1)<blue>[all, blocklist, user, {Group}]<!> (2)<blue>[enable, disable, info]<!>\n' +
+					'e.g. serv blocklist disable<darkgray>  > Disable all services in `blocklist`<!>'],
+			['tweaks', 'Apply a set of tweaks. Task Scheduler, Group Policy, Registry and others.']
+			
+			//['test', 'Tests and debug']
 		];	
 		
 		ARGS.Options = [
-		
 			['sort', 'When displaying service infos, sort by <blue>[state, type]<!>.', 'yes'],
 			['id', 'When displaying service infos, display the service ID as well']
 		];
@@ -62,6 +58,7 @@ class Main extends BaseApp
 			exitError('You need to run this with Administrator rights');
 		}
 		
+		// I don't want a line after H0 text. Note the Engine itself prints to the terminal
 		Print2.H_STYLES[0].line = null;
 		
 		E = new Engine();
@@ -69,19 +66,16 @@ class Main extends BaseApp
 		
 		switch (argsAction)
 		{
-			case 'test':
+			//case 'test':
+			//T.println("Reserved for debugging");
 			
 			case 'tweaks' : 
-				E.tweaks_apply();
+				E.policy_apply(); T.endl();
+				E.tasks_apply_blocklist(); T.endl();
+				E.tweaks_apply(); T.endl();
 				
-			case 'policy' : 
-				E.policy_apply();
-				
-			case 'task_off' : 
-				E.tasks_apply_blocklist();
-			
 			case 'serv':
-				var helpText = 'Correct format : <yellow>serv<!> <cyan>< all, main, user, grp:GROUPNAME ><!> <magenta>< enable, disable, info ><!>';
+				var helpText = 'Correct format : <yellow>serv<!> <cyan>[all, blocklist, user, {Group}]<!> <magenta>[enable, disable, info]<!>';
 				if (argsInput[0] == null || argsInput[1] == null) exitError(helpText);
 				if (['enable', 'disable', 'info'].indexOf(argsInput[1]) < 0) {
 					exitError(helpText);
