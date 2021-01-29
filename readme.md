@@ -2,7 +2,7 @@
 
 Works on a **Windows 10** installation, **`win-mt`** *(Windows My Tools)*, is a **NodeJS** tool that can apply **tweaks/modifications** to various **system settings** based on a config file.
 
-**More specifically : **
+**More specifically :**
 
 - Can **mass-disable** a list of **Services** *( also can mass-enable, display state information on services )*
 - Can **disable Tasks** from the **Task Scheduler** 
@@ -21,7 +21,7 @@ Works on a **Windows 10** installation, **`win-mt`** *(Windows My Tools)*, is a 
 - :heavy_exclamation_mark: **USE AT YOUR OWN RISK** :heavy_exclamation_mark: - I am not responsible if your system crashes​ or stops working.
   
 
-![](/media/shot_02.png)
+![](/media/shot_02.png)  
 <sup>Displaying information on the service group "user"</sup>
 
 
