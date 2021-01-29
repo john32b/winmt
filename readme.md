@@ -1,6 +1,6 @@
 # WIN-MT
 
-Works on a **Windows 10** installation, **`win-mt`** *(Windows My Tools)*, is a **NodeJS** tool that can apply **tweaks/modifications** to various **system settings** based on a config file.
+On a **Windows 10** installation, **`win-mt`** *(Windows My Tools)*, is a **NodeJS** tool that can apply **tweaks/modifications** to various **system settings** based on a **config file**.
 
 **More specifically :**
 
@@ -15,10 +15,16 @@ Works on a **Windows 10** installation, **`win-mt`** *(Windows My Tools)*, is a 
 
 ## :warning: :warning: :warning: READ THIS - IMPORTANT:warning: :warning: :warning:
 
-- `win-mt` applies tweaks meant to work for **WINDOWS 10 LTSC (1809)** 
+- Currently `win-mt` comes with a **curated config file**, that includes my own set of things to alter. You can easily modify the config and make it your own, with your own set of services and tasks etc. to disable and tweaks to apply.
+
+- The included curated config file is meant to work for **WINDOWS 10 LTSC (1809)** 
+
 - Needs  **NodeJS** to run. (https://nodejs.org)
+
 - :grey_exclamation: This is an **advanced** tool :grey_exclamation: - Meant for power users who know what they are doing.
+
 - :heavy_exclamation_mark: **USE AT YOUR OWN RISK** :heavy_exclamation_mark: - I am not responsible if your system crashes​ or stops working.
+  
   
 
 ![](/media/shot_02.png)  
@@ -124,4 +130,4 @@ Every Tweak and List `win-mt` reads from the `config.ini` file. It is documented
 
 ## INFO
 
-**Author**: John32B 2021
+**Author**: John32B

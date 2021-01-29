@@ -84,7 +84,6 @@ EReg.prototype = {
 	}
 };
 var Engine = function() {
-	this.SERVICE_SORTING = null;
 	this.T = djNode_BaseApp.TERMINAL;
 	this.P = new djNode_utils_Print2();
 	if(!sys_FileSystem.exists("config.ini")) {
@@ -108,7 +107,7 @@ Engine.prototype = {
 		if(this.SERV_DB != null) {
 			return;
 		}
-		haxe_Log.trace("--> Getting Service Data ",{ fileName : "src/Engine.hx", lineNumber : 78, className : "Engine", methodName : "services_init"});
+		haxe_Log.trace("--> Getting Service Data ",{ fileName : "src/Engine.hx", lineNumber : 80, className : "Engine", methodName : "services_init"});
 		this.SERV_DB = [];
 		var out = djNode_utils_CLIApp.quickExecS("sc query type= all state= all") + "";
 		var lines = out.split(js_node_Os.EOL);
@@ -136,16 +135,6 @@ Engine.prototype = {
 			}
 			this.SERV_DB.push(s);
 			c += 5;
-		}
-		this.SERV_USER = [];
-		var _g = 0;
-		var _g1 = this.SERV_DB;
-		while(_g < _g1.length) {
-			var s = _g1[_g];
-			++_g;
-			if(s.TYPE == "USER_SHARE_PROCESS") {
-				this.SERV_USER.push(s);
-			}
 		}
 	}
 	,services_sort: function(serv,type) {
@@ -187,20 +176,20 @@ Engine.prototype = {
 		return serv;
 	}
 	,services_act_group: function(grp,act) {
-		haxe_Log.trace("--> Services_act_group( " + grp + " , " + act + ") ",{ fileName : "src/Engine.hx", lineNumber : 172, className : "Engine", methodName : "services_act_group"});
+		haxe_Log.trace("--> Services_act_group( " + grp + " , " + act + ") ",{ fileName : "src/Engine.hx", lineNumber : 170, className : "Engine", methodName : "services_act_group"});
 		this.services_init();
 		var o = this.services_get_group(grp);
 		this.services_sort(o.serv,"ab");
-		if(this.SERVICE_SORTING != null) {
-			this.services_sort(o.serv,this.SERVICE_SORTING);
+		if(this.OPTIONS.sort != null) {
+			this.services_sort(o.serv,this.OPTIONS.sort);
 		}
 		var ss;
 		switch(grp) {
 		case "all":
 			ss = "All Services";
 			break;
-		case "main":
-			ss = "Main Blocklist";
+		case "blocklist":
+			ss = "Blocklist";
 			break;
 		case "user":
 			ss = "User services";
@@ -239,14 +228,21 @@ Engine.prototype = {
 			}
 			this.P.line(60);
 		}
-		this.P.p("= DONE =");
+		this.P.p("- [OK] ");
 	}
 	,services_info: function(SERV) {
 		var T_RUNNING = 0;
-		this.P.table("L,50|L,10,1|L,12,1");
-		this.P.tline();
-		this.P.T.fg(djNode_TColor.magenta);
-		this.P.tr(["Service","Status","Type"]);
+		if(this.OPTIONS.id) {
+			this.P.table("L,48|L,30,1|L,10,1|L,12,1");
+			this.P.tline();
+			this.P.T.fg(djNode_TColor.magenta);
+			this.P.tr(["Service","ID","Status","Type"]);
+		} else {
+			this.P.table("L,48|L,10,1|L,12,1");
+			this.P.tline();
+			this.P.T.fg(djNode_TColor.magenta);
+			this.P.tr(["Service","Status","Type"]);
+		}
 		var _this = this.P.T;
 		process.stdout.write("\x1B[0m");
 		this.P.tline();
@@ -260,6 +256,9 @@ Engine.prototype = {
 				this_running = true;
 			}
 			this.P.tc(serv.DISPLAY_NAME);
+			if(this.OPTIONS.id) {
+				this.P.tc(serv.ID);
+			}
 			this.P.T.fg(this_running ? djNode_TColor.green : djNode_TColor.red);
 			this.P.tc(serv.STATE);
 			if(serv.TYPE == "USER_SHARE_PROCESS") {
@@ -282,39 +281,40 @@ Engine.prototype = {
 		if(group == null) {
 			throw haxe_Exception.thrown("param");
 		}
-		haxe_Log.trace("--> Services_get_group (" + group + ")",{ fileName : "src/Engine.hx", lineNumber : 283, className : "Engine", methodName : "services_get_group"});
+		haxe_Log.trace("--> Services_get_group (" + group + ")",{ fileName : "src/Engine.hx", lineNumber : 290, className : "Engine", methodName : "services_get_group"});
 		var S = [];
 		var SBAD = [];
-		var SIDS;
 		if(group == "user") {
-			return { serv : this.SERV_USER, bad : SBAD};
-		}
-		if(group == "all") {
-			var _g = 0;
-			var _g1 = this.SERV_DB;
-			while(_g < _g1.length) {
-				var s = _g1[_g];
-				++_g;
-				if(["KERNEL_DRIVER","FILE_SYSTEM_DRIVER"].indexOf(s.TYPE) == -1) {
-					S.push(s);
+			var _g = [];
+			var _g1 = 0;
+			var _g2 = this.SERV_DB;
+			while(_g1 < _g2.length) {
+				var v = _g2[_g1];
+				++_g1;
+				if(v.TYPE == "USER_SHARE_PROCESS") {
+					_g.push(v);
 				}
 			}
+			S = _g;
 			return { serv : S, bad : SBAD};
 		}
-		if(group == "main") {
-			SIDS = this.CONF.getTextArray("main","services");
-			if(SIDS == null) {
-				throw haxe_Exception.thrown("Cannot find [main]:fservices in <config.ini>");
+		if(group == "all") {
+			var _g = [];
+			var _g1 = 0;
+			var _g2 = this.SERV_DB;
+			while(_g1 < _g2.length) {
+				var v = _g2[_g1];
+				++_g1;
+				if(["KERNEL_DRIVER","FILE_SYSTEM_DRIVER"].indexOf(v.TYPE) == -1) {
+					_g.push(v);
+				}
 			}
-		} else {
-			var s = group.split(":");
-			if(s.length == 1 || s[1].length == 0 || s[0] != "grp") {
-				throw haxe_Exception.thrown("param");
-			}
-			SIDS = this.CONF.getTextArray("serv",s[1]);
-			if(SIDS == null) {
-				throw haxe_Exception.thrown("Cannot find [serv]:" + s[1] + " in <config.ini>");
-			}
+			S = _g;
+			return { serv : S, bad : SBAD};
+		}
+		var SIDS = this.CONF.getTextArray("services",group);
+		if(SIDS == null) {
+			throw haxe_Exception.thrown("Cannot find [services]:" + group + " in <config.ini>");
 		}
 		var userServ = [];
 		var _g = 0;
@@ -322,14 +322,14 @@ Engine.prototype = {
 		while(_g < _g1) {
 			var c = _g++;
 			if(HxOverrides.substr(SIDS[c],0,2) == "u-") {
-				var sname = HxOverrides.substr(SIDS[c],2,null);
+				var sname = HxOverrides.substr(SIDS[c],2,null).toLowerCase();
 				var found = false;
 				var _g2 = 0;
 				var _g3 = this.SERV_DB;
 				while(_g2 < _g3.length) {
 					var s = _g3[_g2];
 					++_g2;
-					if(s.ID.indexOf(sname) == 0) {
+					if(s.ID.toLowerCase().indexOf(sname) == 0) {
 						found = true;
 						userServ.push(s.ID);
 					}
@@ -351,7 +351,7 @@ Engine.prototype = {
 			var serv = this.service_get_by_id(sid);
 			if(serv == null) {
 				SBAD.push(sid);
-				haxe_Log.trace("Warning, service ID \"" + sid + "\" Does not exist",{ fileName : "src/Engine.hx", lineNumber : 363, className : "Engine", methodName : "services_get_group"});
+				haxe_Log.trace("Warning, service ID \"" + sid + "\" Does not exist",{ fileName : "src/Engine.hx", lineNumber : 349, className : "Engine", methodName : "services_get_group"});
 			} else {
 				S.push(serv);
 			}
@@ -498,7 +498,7 @@ Engine.prototype = {
 			}
 			return null;
 		};
-		var conf = this.CONF.getTextArray("main","tasks");
+		var conf = this.CONF.getTextArray("tweaks","tasks");
 		var _g = 0;
 		while(_g < conf.length) {
 			var tid = conf[_g];
@@ -514,7 +514,7 @@ Engine.prototype = {
 	,tasks_apply_blocklist: function() {
 		this.tasks_init();
 		this.P.H("Disabling ALL tasks: ",0);
-		this.P.p("- Tasks defined in the <yellow>config.ini<!> file");
+		this.P.p("- Tasks defined in <yellow>config.ini<!>");
 		this.P.table("L,60|R,18,1");
 		this.P.tline();
 		this.P.T.fg(djNode_TColor.magenta);
@@ -573,23 +573,23 @@ Engine.prototype = {
 			}
 			this.P.line(60);
 		}
-		this.P.p(" - DONE - ");
+		this.P.p("- [OK] ");
 	}
 	,task_fix_permissions: function(t) {
 		var path = js_node_Path.join(process.env["windir"],"System32\\Tasks");
 		path = js_node_Path.join(path,t.PATH);
 		var op1 = djNode_utils_CLIApp.quickExecS("takeown /f \"" + path + "\"");
 		if(op1 == null) {
-			haxe_Log.trace("Cannot takeown for ",{ fileName : "src/Engine.hx", lineNumber : 606, className : "Engine", methodName : "task_fix_permissions", customParams : [path]});
+			haxe_Log.trace("Cannot takeown for ",{ fileName : "src/Engine.hx", lineNumber : 591, className : "Engine", methodName : "task_fix_permissions", customParams : [path]});
 			return false;
 		}
 		var user = js_node_Os.userInfo().username;
 		var op2 = djNode_utils_CLIApp.quickExecS("icacls \"" + path + "\" /grant " + user + ":f");
 		if(op2 == null) {
-			haxe_Log.trace("Cannot change permissions",{ fileName : "src/Engine.hx", lineNumber : 614, className : "Engine", methodName : "task_fix_permissions", customParams : [path]});
+			haxe_Log.trace("Cannot change permissions",{ fileName : "src/Engine.hx", lineNumber : 599, className : "Engine", methodName : "task_fix_permissions", customParams : [path]});
 			return false;
 		}
-		haxe_Log.trace("task fixed ok",{ fileName : "src/Engine.hx", lineNumber : 618, className : "Engine", methodName : "task_fix_permissions"});
+		haxe_Log.trace("task fixed ok",{ fileName : "src/Engine.hx", lineNumber : 603, className : "Engine", methodName : "task_fix_permissions"});
 		return true;
 	}
 	,policy_apply: function() {
@@ -609,7 +609,7 @@ Engine.prototype = {
 		var _this = this.P.T;
 		process.stdout.write("\n");
 		this.P.line(60);
-		var D = this.CONF.getTextArray("main","commands");
+		var D = this.CONF.getTextArray("tweaks","commands");
 		var _g = 0;
 		while(_g < D.length) {
 			var l = D[_g];
@@ -625,15 +625,15 @@ Engine.prototype = {
 			djNode_utils_CLIApp.quickExecS(l);
 		}
 		this.P.line(60);
-		this.P.p("- DONE");
+		this.P.p("- [OK] ");
 	}
 	,reg_batch: function(key,displayKeys) {
 		if(displayKeys == null) {
 			displayKeys = false;
 		}
-		this.P.p("- Applying All Reg keys from <cyan>[" + key + "]<!> in config.ini ::");
+		this.P.p("- Applying All Reg keys from <cyan>[" + key + "]<!>:");
 		this.P.line(60);
-		var k = this.CONF.getTextArray("main",key);
+		var k = this.CONF.getTextArray("tweaks",key);
 		var c_key = "";
 		var _g = 0;
 		while(_g < k.length) {
@@ -662,7 +662,7 @@ Engine.prototype = {
 			}
 		}
 		this.P.line(60);
-		this.P.p("- DONE");
+		this.P.p("- [OK] ");
 	}
 };
 var HxOverrides = function() { };
@@ -795,11 +795,10 @@ djNode_BaseApp.prototype = {
 			}
 			var a = this.getArgAction(arg);
 			if(a != null) {
-				if(this.argsAction != null) {
-					throw haxe_Exception.thrown("You can only set one <action>");
+				if(this.argsAction == null) {
+					this.argsAction = a[0];
+					continue;
 				}
-				this.argsAction = a[0];
-				continue;
 			}
 			this.argsInput.push(arg);
 		}
@@ -1091,10 +1090,10 @@ Main.main = function() {
 Main.__super__ = djNode_BaseApp;
 Main.prototype = $extend(djNode_BaseApp.prototype,{
 	init: function() {
-		this.PROGRAM_INFO = { name : "Win10 - My Tools (winmt)", version : "0.2", desc : "Manages services/tasks/group policy. Also applies some custom tweaks. <bold,black,:cyan>-- Use at your own risk! --<!>"};
-		this.ARGS.helpText = "Tweaks of services/tasks/registry are stored in <yellow>\"config.ini\"<!>";
-		this.ARGS.Actions = [["serv","<all, main, user, grp:GROUPNAME> <enable, disable, info>. GroupName as defined in config.ini [serv] section\n<main> = the main Service blocklist, <user> are all windows 10 usermode services"],["task_off","Disable tasks defined in the blocklist"],["policy","Apply a custom set of Group Policy values"],["tweaks","Apply some general tweaks"],["test","Tests and debug"]];
-		this.ARGS.Options = [["sort","{type,state}. Sort by TYPE or STATE. More useful when displaying infos.","yes"]];
+		this.PROGRAM_INFO = { name : "Win10 - My Tools (winmt)", version : "0.2", desc : "Applies Tweaks, handles services. <bold,black,:cyan>-- Use at your own risk! --<!>"};
+		this.ARGS.helpText = "Tweaks of services/tasks/registry are defined in <yellow>\"config.ini\"<!>";
+		this.ARGS.Actions = [["serv","(1)<blue>[all, blocklist, user, {Group}]<!> (2)<blue>[enable, disable, info]<!>\n" + "e.g. serv blocklist disable<darkgray>  > Disable all services in `blocklist`<!>"],["tweaks","Apply a set of tweaks. Task Scheduler, Group Policy, Registry and others."]];
+		this.ARGS.Options = [["sort","When displaying service infos, sort by <blue>[state, type]<!>.","yes"],["id","When displaying service infos, display the service ID as well"]];
 		djNode_BaseApp.prototype.init.call(this);
 	}
 	,onStart: function() {
@@ -1110,13 +1109,10 @@ Main.prototype = $extend(djNode_BaseApp.prototype,{
 		}
 		djNode_utils_Print2.H_STYLES[0].line = null;
 		this.E = new Engine();
-		this.E.SERVICE_SORTING = this.argsOptions.sort;
+		this.E.OPTIONS = this.argsOptions;
 		switch(this.argsAction) {
-		case "policy":
-			this.E.policy_apply();
-			break;
 		case "serv":
-			var helpText = "Correct format : <yellow>serv<!> <cyan>< all, main, user, grp:GROUPNAME ><!> <magenta>< enable, disable, info ><!>";
+			var helpText = "Correct format : <yellow>serv<!> <cyan>[all, blocklist, user, {Group}]<!> <magenta>[enable, disable, info]<!>";
 			if(this.argsInput[0] == null || this.argsInput[1] == null) {
 				this.exitError(helpText);
 			}
@@ -1138,13 +1134,16 @@ Main.prototype = $extend(djNode_BaseApp.prototype,{
 				}
 			}
 			break;
-		case "task_off":
-			this.E.tasks_apply_blocklist();
-			break;
-		case "test":
-			break;
 		case "tweaks":
+			this.E.policy_apply();
+			var _this = this.T;
+			process.stdout.write("\n");
+			this.E.tasks_apply_blocklist();
+			var _this = this.T;
+			process.stdout.write("\n");
 			this.E.tweaks_apply();
+			var _this = this.T;
+			process.stdout.write("\n");
 			break;
 		default:
 		}
@@ -2898,6 +2897,8 @@ String.__name__ = true;
 Array.__name__ = true;
 js_Boot.__toStr = ({ }).toString;
 Engine.CONF_FILE = "config.ini";
+Engine.SECTION_SERVICES = "services";
+Engine.SECTION_TWEAKS = "tweaks";
 djNode_BaseApp.VERSION = "0.6.1";
 djNode_BaseApp.LINE_LEN = 40;
 djA_StrT.OVERFLOW_SMBL = "-";
