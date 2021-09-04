@@ -663,16 +663,27 @@ class Engine
 				continue;
 			}
 			
-			if (line.indexOf('HKEY') == 0){
+			if (line.indexOf('HKEY') == 0)
+			{
 				c_key = line;
 				if(displayKeys) P.p(' + <yellow>$c_key<!>');
 				continue;
-			}else{
+			}
+			
+			if (line.charAt(0) == '-')
+			{
+				c_key = line.substr(1);
+				if (displayKeys) P.p(' + <red>DELETING<!> : <yellow>$c_key<!>');
+				Registry.deleteKey(c_key);
+				continue;
+			}
+			
+			// -- It must be a normal key value
 				var d = line.split(' ');
 				if(displayKeys) P.p('     ${d[0]} = <green,bold>${d[1]}<!>');
 				// Actually apply the key:
-				var res = Registry.setValueDWord(c_key, d[0], d[1]);
-			}
+				Registry.setValueDWord(c_key, d[0], d[1]);
+				
 		}
 		P.line(60);
 		P.p("- [OK] ");
