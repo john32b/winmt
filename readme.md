@@ -1,5 +1,7 @@
 # WIN-MT
 
+> ✴️ **2022-08 NOTICE** -- I am done with Windows, I will never be working on this project ever again 👻👻
+
 On a **Windows 10** installation, **`win-mt`** *(Windows My Tools)*, is a **NodeJS** tool that can apply **tweaks/modifications** to various **system settings** based on a **config file**.
 
 **More specifically :**
@@ -13,7 +15,7 @@ On a **Windows 10** installation, **`win-mt`** *(Windows My Tools)*, is a **Node
 
 
 
-## :warning: :warning: :warning: READ THIS - IMPORTANT:warning: :warning: :warning:
+## ❗ READ THIS - IMPORTANT ❗
 
 - Currently `win-mt` comes with a **curated config file**, that includes my own set of things to alter. You can easily modify the config and make it your own, with your own set of services and tasks etc. to disable and tweaks to apply.
 
@@ -21,9 +23,9 @@ On a **Windows 10** installation, **`win-mt`** *(Windows My Tools)*, is a **Node
 
 - Needs  **NodeJS** to run. (https://nodejs.org)
 
-- :grey_exclamation: This is an **advanced** tool :grey_exclamation: - Meant for power users who know what they are doing.
+- ☢️ This is an **advanced** tool ☣️ - Meant for power users who know what they are doing.
 
-- :heavy_exclamation_mark: **USE AT YOUR OWN RISK** :heavy_exclamation_mark: - I am not responsible if your system crashes​ or stops working.
+- ⚠️ **USE AT YOUR OWN RISK** ⚠️ - I am not responsible if your system crashes​ or stops working.
   
   
 
@@ -39,14 +41,11 @@ I wanted a quick way to apply a set of settings that I was doing by hand every t
 This tool is not meant for mass-consumption, I know that this is a very niche thing. Perhaps it will help someone coming from google that wants to find a quick way to mass disable services, who knows.
 
 
-
-## :runner: RUNNING
+## 🏃‍♂️ RUNNING
 
 First of all, `win-mt` can only run with **administrator privileges**. It will warn you about it.  
 
 ![](/media/shot_01.png)
-
-
 
 `win-mt` currently has two main ACTIONS. Working with SERVICES and applying all the TWEAKS at once. So if you want to apply the tweaks and disable the service blocklist, you need to run this twice 😐
 
@@ -88,7 +87,7 @@ To run just do `node winmt tweaks`
 
 
 
-## :wrench: Advanced / How does it do it
+## 🛠️ Advanced / How does it do it
 
 #### Enabling/Disabling Services
 
@@ -117,7 +116,9 @@ Every Tweak and List `win-mt` reads from the `config.ini` file. It is documented
 
 - General HAXE knowledge, how to build, install a haxelib
 - HAXE 4.1.5
-- djNode, installed as a haxelib. https://github.com/john32b/djNode
+- djNode 0.6.2, installed as a haxelib. https://github.com/john32b/djNode 
+  - Download the tag zip directly from [here](https://github.com/john32b/djNode/releases/tag/v0.6.2)
+  - Install the `.zip` file with `haxelib install djNode-0.6.2.zip`
 - hxnodejs. https://github.com/HaxeFoundation/hxnodejs
 
 **To build:**
@@ -126,8 +127,6 @@ Every Tweak and List `win-mt` reads from the `config.ini` file. It is documented
 
 > This will generate `winmt.js` in the bin folder
 
-
-
+---
 ## INFO
-
-**Author**: John32B
+Author : **John32B** - Project started: **2020/10** - Tools : **Haxe Built to nodeJS**

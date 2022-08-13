@@ -11,7 +11,7 @@
 
 package;
 
-import djA.cfg.ConfigFileB;
+import djA.ConfigFileB;
 import djNode.BaseApp;
 import djNode.Terminal;
 import djNode.utils.CLIApp;

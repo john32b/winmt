@@ -12,13 +12,6 @@ class Main extends BaseApp
 	
 	override function init():Void 
 	{	
-		#if debug
-			LOG.pipeTrace(); // All trace() calls will redirect to LOG object
-			LOG.setLogFile("a:\\winmt_log.txt");
-			LOG.FLAG_SHOW_POS = false;
-			CLIApp.FLAG_LOG_QUIET = false; // Trace the commands that CLIApp executes
-		#end
-		
 		PROGRAM_INFO = {
 			name:"Win10 - My Tools (winmt)",
 			version:"0.2",
@@ -37,10 +30,19 @@ class Main extends BaseApp
 		
 		ARGS.Options = [
 			['sort', 'When displaying service infos, sort by <blue>[state, type]<!>.', 'yes'],
-			['id', 'When displaying service infos, display the service ID as well']
+			['id', 'When displaying service infos, display the service ID as well'],
+			['log', 'Write debug logs to a file', 'yes']
 		];
 		
 		super.init();
+		
+		if (argsOptions.log != null)
+		{
+			LOG.pipeTrace(); // All trace() calls will redirect to LOG object
+			LOG.setLogFile(argsOptions.log);
+			LOG.FLAG_SHOW_POS = false;
+			CLIApp.FLAG_LOG_QUIET = false; // Trace the commands that CLIApp executes
+		}
 	}//---------------------------------------------------;
 	
 	// This is the user code entry point :
@@ -61,7 +63,12 @@ class Main extends BaseApp
 		// I don't want a line after H0 text. Note the Engine itself prints to the terminal
 		Print2.H_STYLES[0].line = null;
 		
-		E = new Engine();
+		try{
+			E = new Engine();
+		}catch (err:String) {
+			exitError(err);
+		}
+		
 		E.OPTIONS = argsOptions;
 		
 		switch (argsAction)

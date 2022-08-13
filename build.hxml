@@ -4,7 +4,7 @@
 
 -cmd Echo Building WinMT Release
 
--lib djNode
--cp src/
--main Main
+-L djNode:0.6.2
+-p src/
+-m Main
 -js bin/winmt.js
